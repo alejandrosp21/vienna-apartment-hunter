@@ -25,13 +25,14 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 MAX_PRICE = 1000
 MIN_SIZE = 30
 
-# Target PLZ for willhaben post-filtering
+# Willhaben: post-filter by PLZ (site-level district filtering
+# not available without session cookies)
 TARGET_PLZ = {"1010", "1020", "1030", "1040", "1050", "1090", "1200"}
 
-# Immoscout region codes (from user's actual search URL)
+# Immoscout: region codes from manual search
 IMMOSCOUT_REGIONS = "009001001,009001002,009001003,009001004,009001005,009001009,009001020"
 
-# Wohnnet district codes (from user's actual search URL)
+# Wohnnet: district codes from manual search
 WOHNNET_DISTRICTS = "g90101--g90201--g90301--g90401--g90501--g90901--g92001"
 
 PLZ_LABELS = {
@@ -135,86 +136,13 @@ def prune_seen(seen: dict) -> dict:
 # ============================================================
 # WILLHABEN
 #
-# REST API with basic price/size filters only (areaId causes 400).
-# Post-filter results by PLZ to target districts.
-# Fallback: HTML page with rows=5.
+# Fetches HTML with rows=5 sorted newest first.
+# Results embedded in __NEXT_DATA__ JSON.
+# Post-filtered by PLZ to target districts.
+# At 10-min polling, 5 newest is enough to catch new listings.
 # ============================================================
 
 def scrape_willhaben() -> list[dict]:
-    listings = []
-
-    api_url = "https://api.willhaben.at/restapi/v2/search/atz/seo/immobilien/mietwohnungen/wien"
-    params = [
-        ("rows", 30),
-        ("sort", 1),
-        ("PRICE_TO", MAX_PRICE),
-        ("ESTATE_SIZE/LIVING_AREA_FROM", MIN_SIZE),
-    ]
-    api_headers = {
-        **HEADERS,
-        "Accept": "application/json",
-    }
-
-    try:
-        print("[willhaben] Fetching REST API...")
-        resp = requests.get(api_url, params=params, headers=api_headers, timeout=30)
-        print(f"[willhaben] Status: {resp.status_code}, Size: {len(resp.text)} chars")
-        resp.raise_for_status()
-
-        data = resp.json()
-        ad_list = data.get("advertSummaryList", {}).get("advertSummary", [])
-        if not ad_list:
-            sr = data.get("searchResult", {})
-            ad_list = sr.get("advertSummaryList", {}).get("advertSummary", [])
-
-        print(f"[willhaben] API returned {len(ad_list)} ads")
-
-        for ad in ad_list:
-            if not isinstance(ad, dict):
-                continue
-            attrs = {}
-            for a in ad.get("attributes", {}).get("attribute", []):
-                vals = a.get("values", [])
-                if vals:
-                    attrs[a.get("name", "")] = vals[0]
-            ad_id = str(ad.get("id", ""))
-            if not ad_id:
-                continue
-            listings.append({
-                "id": f"wh_{ad_id}",
-                "source": "willhaben",
-                "title": ad.get("description", "N/A"),
-                "price": attrs.get("PRICE/AMOUNT", attrs.get("PRICE", "")),
-                "size": attrs.get("ESTATE_SIZE/LIVING_AREA", ""),
-                "rooms": attrs.get("NUMBER_OF_ROOMS", ""),
-                "district": attrs.get("POSTCODE", ""),
-                "location": attrs.get("LOCATION", ""),
-                "url": f"https://www.willhaben.at/iad/object?adId={ad_id}",
-            })
-
-        print(f"[willhaben] Parsed: {len(listings)} listings")
-
-        # Post-filter by target districts
-        before = len(listings)
-        listings = [l for l in listings if l.get("district", "") in TARGET_PLZ or not l.get("district")]
-        print(f"[willhaben] District filter: {before} -> {len(listings)}")
-
-        if not listings:
-            print("[willhaben] No results after filter, trying HTML fallback...")
-            listings = _willhaben_html_fallback()
-
-    except Exception as e:
-        print(f"[willhaben] ERROR: {e}")
-        try:
-            print("[willhaben] Trying HTML fallback after error...")
-            listings = _willhaben_html_fallback()
-        except Exception as e2:
-            print(f"[willhaben] HTML fallback also failed: {e2}")
-
-    return listings
-
-
-def _willhaben_html_fallback() -> list[dict]:
     listings = []
     url = "https://www.willhaben.at/iad/immobilien/mietwohnungen/wien/"
     params = [
@@ -223,50 +151,69 @@ def _willhaben_html_fallback() -> list[dict]:
         ("PRICE_TO", MAX_PRICE),
         ("ESTATE_SIZE/LIVING_AREA_FROM", MIN_SIZE),
     ]
-    resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
-    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.DOTALL)
-    if match:
-        data = json.loads(match.group(1))
-        pp = data.get("props", {}).get("pageProps", {})
-        sr = pp.get("searchResult", {})
-        ad_list = sr.get("advertSummaryList", {}).get("advertSummary", [])
-        for ad in ad_list:
-            if not isinstance(ad, dict):
-                continue
-            attrs = {}
-            for a in ad.get("attributes", {}).get("attribute", []):
-                vals = a.get("values", [])
-                if vals:
-                    attrs[a.get("name", "")] = vals[0]
-            ad_id = str(ad.get("id", ""))
-            if not ad_id:
-                continue
-            listings.append({
-                "id": f"wh_{ad_id}",
-                "source": "willhaben",
-                "title": ad.get("description", "N/A"),
-                "price": attrs.get("PRICE/AMOUNT", ""),
-                "size": attrs.get("ESTATE_SIZE/LIVING_AREA", ""),
-                "rooms": attrs.get("NUMBER_OF_ROOMS", ""),
-                "district": attrs.get("POSTCODE", ""),
-                "location": attrs.get("LOCATION", ""),
-                "url": f"https://www.willhaben.at/iad/object?adId={ad_id}",
-            })
-        # Post-filter
-        before = len(listings)
-        listings = [l for l in listings if l.get("district", "") in TARGET_PLZ or not l.get("district")]
-        print(f"[willhaben] HTML fallback found: {before}, after filter: {len(listings)}")
+
+    try:
+        print("[willhaben] Fetching...")
+        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        print(f"[willhaben] Status: {resp.status_code}, Size: {len(resp.text)} chars")
+        resp.raise_for_status()
+
+        match = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.DOTALL
+        )
+        if match:
+            data = json.loads(match.group(1))
+            pp = data.get("props", {}).get("pageProps", {})
+            sr = pp.get("searchResult", {})
+            ad_list = sr.get("advertSummaryList", {}).get("advertSummary", [])
+
+            print(f"[willhaben] Found {len(ad_list)} ads in JSON")
+
+            for ad in ad_list:
+                if not isinstance(ad, dict):
+                    continue
+                attrs = {}
+                for a in ad.get("attributes", {}).get("attribute", []):
+                    vals = a.get("values", [])
+                    if vals:
+                        attrs[a.get("name", "")] = vals[0]
+                ad_id = str(ad.get("id", ""))
+                if not ad_id:
+                    continue
+                listings.append({
+                    "id": f"wh_{ad_id}",
+                    "source": "willhaben",
+                    "title": ad.get("description", "N/A"),
+                    "price": attrs.get("PRICE/AMOUNT", attrs.get("PRICE", "")),
+                    "size": attrs.get("ESTATE_SIZE/LIVING_AREA", ""),
+                    "rooms": attrs.get("NUMBER_OF_ROOMS", ""),
+                    "district": attrs.get("POSTCODE", ""),
+                    "location": attrs.get("LOCATION", ""),
+                    "url": f"https://www.willhaben.at/iad/object?adId={ad_id}",
+                })
+
+            # Post-filter by target districts
+            before = len(listings)
+            listings = [l for l in listings if l.get("district", "") in TARGET_PLZ or not l.get("district")]
+            print(f"[willhaben] District filter: {before} -> {len(listings)}")
+        else:
+            print("[willhaben] No __NEXT_DATA__ found")
+
+    except Exception as e:
+        print(f"[willhaben] ERROR: {e}")
+
     return listings
 
 
 # ============================================================
 # IMMOSCOUT24.AT
+#
+# Uses exact filter params from user's manual search.
+# Extracts listings from JSON-LD or HTML expose links.
 # ============================================================
 
 def scrape_immoscout() -> list[dict]:
     listings = []
-
     base_url = "https://www.immobilienscout24.at/regional/wohnung-mieten"
     params = {
         "countryCode": "AT",
@@ -281,8 +228,7 @@ def scrape_immoscout() -> list[dict]:
         resp = requests.get(base_url, params=params, headers=HEADERS, timeout=30)
         print(f"[immoscout24] Status: {resp.status_code}, Size: {len(resp.text)} chars")
         resp.raise_for_status()
-        html = resp.text
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         # Strategy 1: JSON-LD
         for script in soup.find_all("script", type="application/ld+json"):
@@ -378,6 +324,9 @@ def scrape_immoscout() -> list[dict]:
 
 # ============================================================
 # WOHNNET.AT
+#
+# Uses unterregionen param with district codes.
+# Extracts listings from HTML links.
 # ============================================================
 
 def scrape_wohnnet() -> list[dict]:
