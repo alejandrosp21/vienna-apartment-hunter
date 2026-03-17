@@ -152,5 +152,19 @@
     "title": "3-Zimmer-Gemeindewohnung NUR MIT VORMERKSCHEIN bis 28.2.2026",
     "price": "835",
     "url": "https://www.willhaben.at/iad/object?adId=1755019002"
+  },
+  "wh_674814503": {
+    "first_seen": "2026-03-17T19:32:27.187880+00:00",
+    "source": "willhaben",
+    "title": "ruhig - hell - provisionsfrei",
+    "price": "930",
+    "url": "https://www.willhaben.at/iad/object?adId=674814503"
+  },
+  "wh_853173637": {
+    "first_seen": "2026-03-17T19:32:28.172834+00:00",
+    "source": "willhaben",
+    "title": "WG (Wohngemeinschaft)- Zimmer, All inclusive, voll möbliert, direkt vom Eigentüm",
+    "price": "410.42",
+    "url": "https://www.willhaben.at/iad/object?adId=853173637"
   }
 }
