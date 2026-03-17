@@ -1,0 +1,42 @@
+name: Vienna Apartment Hunter
+
+on:
+  schedule:
+    # Every 10 minutes (GitHub may delay cron by a few mins)
+    # Adjust to */5 for faster polling (costs more free minutes on private repos)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Manual trigger for testing
+
+permissions:
+  contents: write  # Needed to commit seen.json back
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scraper.py
+
+      - name: Commit seen listings
+        run: |
+          git config user.name "apartment-bot"
+          git config user.email "bot@noreply.github.com"
+          git add seen.json health.json || true
+          git diff --cached --quiet || git commit -m "update seen listings [skip ci]"
+          git push
