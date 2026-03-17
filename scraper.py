@@ -22,8 +22,8 @@ from pathlib import Path
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-MAX_PRICE = 1000      # EUR (warm/total)
-MIN_SIZE = 30         # m2
+MAX_PRICE = 1000
+MIN_SIZE = 30
 TARGET_PLZ = {"1010", "1020", "1030", "1040", "1090", "1200"}
 
 PLZ_LABELS = {
@@ -57,7 +57,6 @@ def send_telegram(message: str) -> bool:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print(f"[TELEGRAM OFF] {message[:80]}...")
         return False
-
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -81,12 +80,9 @@ def format_listing_message(listing: dict) -> str:
         "wohnnet": "\U0001f7e2",
     }
     icon = source_icons.get(listing["source"], "\u26aa")
-
     lines = [f"{icon} <b>NEW: {listing['source'].upper()}</b>", ""]
-
     if listing.get("title"):
         lines.append(f"\U0001f3e0 {listing['title'][:140]}")
-
     details = []
     if listing.get("price"):
         details.append(f"\U0001f4b0 \u20ac{listing['price']}")
@@ -96,17 +92,14 @@ def format_listing_message(listing: dict) -> str:
         details.append(f"\U0001f6aa {listing['rooms']} Zimmer")
     if details:
         lines.append(" | ".join(details))
-
     if listing.get("location"):
         lines.append(f"\U0001f4cd {listing['location']}")
     if listing.get("district"):
         label = PLZ_LABELS.get(listing["district"], listing["district"])
         lines.append(f"\U0001f3d8\ufe0f Bezirk: {label}")
-
     lines.append("")
     lines.append(f'\U0001f517 <a href="{listing["url"]}">Listing ansehen</a>')
     lines.append(f"\n\u23f0 {datetime.now().strftime('%H:%M  %d.%m.%Y')}")
-
     return "\n".join(lines)
 
 
@@ -122,10 +115,8 @@ def load_seen() -> dict:
             return {}
     return {}
 
-
 def save_seen(seen: dict):
     SEEN_FILE.write_text(json.dumps(seen, indent=2, ensure_ascii=False))
-
 
 def prune_seen(seen: dict) -> dict:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=SEEN_MAX_AGE_DAYS)).isoformat()
@@ -133,7 +124,33 @@ def prune_seen(seen: dict) -> dict:
 
 
 # ============================================================
+# DISTRICT FILTER (shared)
+# ============================================================
+
+def filter_by_district(listings: list[dict], source_name: str) -> list[dict]:
+    """Filter listings by target PLZ. Keeps listings with unknown district."""
+    if not TARGET_PLZ:
+        return listings
+    before = len(listings)
+    filtered = []
+    for l in listings:
+        plz = l.get("district", "")
+        loc = (l.get("location", "") + " " + l.get("title", "")).lower()
+        if plz in TARGET_PLZ:
+            filtered.append(l)
+        elif any(p in loc for p in TARGET_PLZ):
+            filtered.append(l)
+        elif not plz:
+            # Unknown district: include to avoid missing listings
+            filtered.append(l)
+    print(f"[{source_name}] District filter: {before} -> {len(filtered)}")
+    return filtered
+
+
+# ============================================================
 # WILLHABEN
+# Confirmed structure: pageProps.searchResult.advertSummaryList.advertSummary
+# Each ad has: id, description, attributes.attribute (list of name/values pairs)
 # ============================================================
 
 def scrape_willhaben() -> list[dict]:
@@ -151,56 +168,68 @@ def scrape_willhaben() -> list[dict]:
         print("[willhaben] Fetching...")
         resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
         print(f"[willhaben] Status: {resp.status_code}, Size: {len(resp.text)} chars")
-        print(f"[willhaben] Final URL: {resp.url}")
         resp.raise_for_status()
         html = resp.text
 
-        if len(html) < 1000:
-            print(f"[willhaben] WARNING: Very short response. Full content:\n{html}")
-        elif "captcha" in html.lower() or "robot" in html.lower():
-            print("[willhaben] WARNING: Possible captcha/bot detection page")
-
-        # Strategy 1: __NEXT_DATA__ JSON
         match = re.search(
             r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL
         )
         if match:
-            print("[willhaben] Found __NEXT_DATA__, parsing JSON...")
             data = json.loads(match.group(1))
-
             pp = data.get("props", {}).get("pageProps", {})
-            print(f"[willhaben] pageProps keys: {list(pp.keys())[:15]}")
+            sr = pp.get("searchResult", {})
+            ad_list = sr.get("advertSummaryList", {}).get("advertSummary", [])
 
-            listings = _parse_willhaben_nextdata(data)
-            print(f"[willhaben] JSON parser found: {len(listings)} listings")
+            print(f"[willhaben] Found {len(ad_list)} ads in JSON")
+
+            for ad in ad_list:
+                if not isinstance(ad, dict):
+                    continue
+
+                # Build attribute lookup from the attribute list
+                attrs = {}
+                attr_list = ad.get("attributes", {}).get("attribute", [])
+                for a in attr_list:
+                    vals = a.get("values", [])
+                    if vals:
+                        attrs[a.get("name", "")] = vals[0]
+
+                ad_id = str(ad.get("id", ""))
+                if not ad_id:
+                    continue
+
+                listings.append({
+                    "id": f"wh_{ad_id}",
+                    "source": "willhaben",
+                    "title": ad.get("description", "N/A"),
+                    "price": attrs.get("PRICE/AMOUNT", attrs.get("PRICE", "")),
+                    "size": attrs.get("ESTATE_SIZE/LIVING_AREA", ""),
+                    "rooms": attrs.get("NUMBER_OF_ROOMS", ""),
+                    "district": attrs.get("POSTCODE", ""),
+                    "location": attrs.get("LOCATION", ""),
+                    "url": f"https://www.willhaben.at/iad/immobilien/d/mietwohnungen/wien/{ad_id}/",
+                })
         else:
-            print("[willhaben] No __NEXT_DATA__ found, trying HTML...")
-
+            print("[willhaben] No __NEXT_DATA__ found, falling back to HTML")
+            # Fallback: look for links to individual ads
             soup = BeautifulSoup(html, "html.parser")
-            scripts = soup.find_all("script", id=True)
-            print(f"[willhaben] Script tags with id: {[s.get('id') for s in scripts]}")
+            for link in soup.select('a[href*="/iad/immobilien/d/"]'):
+                href = link.get("href", "")
+                if not href.startswith("http"):
+                    href = "https://www.willhaben.at" + href
+                id_match = re.search(r"/(\d{6,})", href)
+                if id_match:
+                    listings.append({
+                        "id": f"wh_{id_match.group(1)}",
+                        "source": "willhaben",
+                        "title": link.get_text(strip=True)[:150],
+                        "price": "", "size": "", "rooms": "",
+                        "district": "", "location": "",
+                        "url": href,
+                    })
 
-            json_ld = soup.find_all("script", type="application/ld+json")
-            print(f"[willhaben] JSON-LD blocks: {len(json_ld)}")
-
-            listings = _parse_willhaben_html(html)
-            print(f"[willhaben] HTML parser found: {len(listings)} listings")
-
-        # District filter
-        if TARGET_PLZ:
-            before = len(listings)
-            filtered = []
-            for l in listings:
-                plz = l.get("district", "")
-                loc = l.get("location", "").lower()
-                if plz in TARGET_PLZ:
-                    filtered.append(l)
-                elif any(p in loc for p in TARGET_PLZ):
-                    filtered.append(l)
-                elif not plz:
-                    filtered.append(l)
-            listings = filtered
-            print(f"[willhaben] District filter: {before} -> {len(listings)}")
+        print(f"[willhaben] Parsed: {len(listings)} listings")
+        listings = filter_by_district(listings, "willhaben")
 
     except Exception as e:
         print(f"[willhaben] ERROR: {e}")
@@ -208,194 +237,133 @@ def scrape_willhaben() -> list[dict]:
     return listings
 
 
-def _parse_willhaben_nextdata(data: dict) -> list[dict]:
-    listings = []
-    try:
-        pp = data.get("props", {}).get("pageProps", {})
-
-        search_result = pp.get("searchResult", {})
-        ad_list = (
-            search_result.get("advertSummaryList", {}).get("advertSummary", [])
-        )
-
-        if not ad_list:
-            ad_list = pp.get("advertSummaryList", {}).get("advertSummary", [])
-        if not ad_list:
-            ad_list = pp.get("ads", [])
-        if not ad_list:
-            ad_list = search_result.get("ads", [])
-        if not ad_list:
-            for key in ["results", "items", "listings", "data"]:
-                if key in pp and isinstance(pp[key], list):
-                    ad_list = pp[key]
-                    print(f"[willhaben] Found listings under pageProps.{key}")
-                    break
-                if key in search_result and isinstance(search_result[key], list):
-                    ad_list = search_result[key]
-                    print(f"[willhaben] Found listings under searchResult.{key}")
-                    break
-
-        print(f"[willhaben] ad_list length: {len(ad_list)}")
-        if ad_list and isinstance(ad_list[0], dict):
-            print(f"[willhaben] First item keys: {list(ad_list[0].keys())[:15]}")
-
-        for ad in ad_list:
-            if not isinstance(ad, dict):
-                continue
-
-            attrs = {}
-            for a in ad.get("attributes", {}).get("attribute", []):
-                vals = a.get("values", [])
-                if vals:
-                    attrs[a["name"]] = vals[0]
-
-            ad_id = str(ad.get("id", ""))
-            if not ad_id:
-                continue
-
-            listings.append({
-                "id": f"wh_{ad_id}",
-                "source": "willhaben",
-                "title": ad.get("description", ad.get("title", "N/A")),
-                "price": attrs.get("PRICE/AMOUNT", attrs.get("PRICE", "")),
-                "size": attrs.get("ESTATE_SIZE/LIVING_AREA", attrs.get("LIVING_AREA", "")),
-                "rooms": attrs.get("NUMBER_OF_ROOMS", attrs.get("ROOMS", "")),
-                "district": attrs.get("POSTCODE", ""),
-                "location": attrs.get("LOCATION", ""),
-                "url": f"https://www.willhaben.at/iad/immobilien/d/mietwohnungen/wien/{ad_id}/",
-            })
-
-    except (KeyError, TypeError, IndexError) as e:
-        print(f"[willhaben] JSON parse error: {e}")
-
-    return listings
-
-
-def _parse_willhaben_html(html: str) -> list[dict]:
-    listings = []
-    soup = BeautifulSoup(html, "html.parser")
-
-    selectors = [
-        '[data-testid="search-result-entry"]',
-        '[data-testid="ad-list-item"]',
-        "article.search-result-entry",
-        'a[href*="/iad/immobilien/d/mietwohnungen/"]',
-        'a[href*="/iad/immobilien/d/"]',
-    ]
-
-    for sel in selectors:
-        found = soup.select(sel)
-        print(f"[willhaben] Selector '{sel}': {len(found)} matches")
-        if found:
-            for el in found:
-                link = el.find("a", href=True) if el.name != "a" else el
-                if not link or not link.get("href"):
-                    continue
-                href = link["href"]
-                if not href.startswith("http"):
-                    href = "https://www.willhaben.at" + href
-                id_match = re.search(r"/(\d{6,})", href)
-                if not id_match:
-                    continue
-                listings.append({
-                    "id": f"wh_{id_match.group(1)}",
-                    "source": "willhaben",
-                    "title": link.get_text(strip=True)[:150],
-                    "price": "",
-                    "size": "",
-                    "rooms": "",
-                    "district": "",
-                    "location": "",
-                    "url": href,
-                })
-            break
-
-    return listings
-
-
 # ============================================================
-# IMMOSCOUT24.AT (immobilienscout24.at)
+# IMMOSCOUT24.AT
+# Confirmed: uses window.__INITIAL_STATE__ (NOT __NEXT_DATA__)
+# Correct URL: /regional/wien/wien/wohnung-mieten
+# Expose links: /expose/{hex_id} (e.g. /expose/6973585d9331de722d41f262)
 # ============================================================
 
 def scrape_immoscout() -> list[dict]:
     listings = []
-    url = "https://www.immobilienscout24.at/suche/mietwohnungen/wien"
-    params = {
-        "price": f"-{MAX_PRICE}",
-        "livingspace": f"{MIN_SIZE}-",
-        "sorting": "2",
-    }
+
+    # The correct URL structure for immoscout24.at
+    url = "https://www.immobilienscout24.at/regional/wien/wien/wohnung-mieten"
 
     try:
         print("[immoscout24] Fetching...")
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        resp = requests.get(url, headers=HEADERS, timeout=30)
         print(f"[immoscout24] Status: {resp.status_code}, Size: {len(resp.text)} chars")
-        print(f"[immoscout24] Final URL: {resp.url}")
         resp.raise_for_status()
         html = resp.text
-
-        if len(html) < 1000:
-            print(f"[immoscout24] WARNING: Very short response. Full content:\n{html}")
-        elif "captcha" in html.lower() or "robot" in html.lower():
-            print("[immoscout24] WARNING: Possible captcha/bot detection page")
-
         soup = BeautifulSoup(html, "html.parser")
 
-        # Strategy 1: __NEXT_DATA__
-        nd_match = re.search(
-            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL
+        # Strategy 1: Parse __INITIAL_STATE__ JSON
+        initial_state_match = re.search(
+            r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});\s*(?:</script>|$)',
+            html, re.DOTALL
         )
-        if nd_match:
-            print("[immoscout24] Found __NEXT_DATA__, parsing...")
+        if initial_state_match:
+            print("[immoscout24] Found __INITIAL_STATE__")
             try:
-                data = json.loads(nd_match.group(1))
-                pp = data.get("props", {}).get("pageProps", {})
-                print(f"[immoscout24] pageProps keys: {list(pp.keys())[:15]}")
-                listings = _parse_immoscout_json(data)
-                print(f"[immoscout24] JSON parser found: {len(listings)}")
+                state = json.loads(initial_state_match.group(1))
+                # Try to extract listings from the state object
+                listings = _parse_immoscout_state(state)
+                print(f"[immoscout24] State parser found: {len(listings)}")
             except json.JSONDecodeError as e:
                 print(f"[immoscout24] JSON decode error: {e}")
-        else:
-            print("[immoscout24] No __NEXT_DATA__")
-            scripts = soup.find_all("script", id=True)
-            print(f"[immoscout24] Script tags with id: {[s.get('id') for s in scripts]}")
 
-        # Strategy 2: embedded JSON
+        # Strategy 2: Parse JSON-LD schema.org data
         if not listings:
-            for script in soup.find_all("script"):
-                text = script.string or ""
-                if any(kw in text for kw in ["resultList", "searchResult", "realEstateId", "expose"]):
-                    print(f"[immoscout24] Found promising script tag ({len(text)} chars)")
-                    try:
-                        json_match = re.search(r'\{.*"resultList".*\}', text, re.DOTALL)
-                        if json_match:
-                            data = json.loads(json_match.group())
-                            listings = _parse_immoscout_json(data)
-                            print(f"[immoscout24] Embedded JSON found: {len(listings)}")
-                    except (json.JSONDecodeError, AttributeError):
-                        continue
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    ld_data = json.loads(script.string)
+                    if isinstance(ld_data, dict) and ld_data.get("@type") == "CollectionPage":
+                        items = ld_data.get("mainEntity", [])
+                        if isinstance(items, list):
+                            for item in items:
+                                if not isinstance(item, dict):
+                                    continue
+                                item_url = item.get("url", "")
+                                id_match = re.search(r"/expose/([a-f0-9]+)", item_url)
+                                if id_match:
+                                    listings.append({
+                                        "id": f"is_{id_match.group(1)}",
+                                        "source": "immoscout24",
+                                        "title": item.get("name", "N/A"),
+                                        "price": "",
+                                        "size": "",
+                                        "rooms": "",
+                                        "district": "",
+                                        "location": item.get("address", ""),
+                                        "url": f"https://www.immobilienscout24.at{item_url}" if not item_url.startswith("http") else item_url,
+                                    })
+                            if listings:
+                                print(f"[immoscout24] JSON-LD found: {len(listings)}")
+                except (json.JSONDecodeError, TypeError):
+                    continue
 
-        # Strategy 3: HTML fallback
+        # Strategy 3: HTML fallback - extract expose links
         if not listings:
-            print("[immoscout24] Trying HTML fallback...")
-            listings = _parse_immoscout_html(soup)
-            print(f"[immoscout24] HTML parser found: {len(listings)}")
+            print("[immoscout24] Using HTML link extraction...")
+            seen_ids = set()
+            for link in soup.select('a[href*="/expose/"]'):
+                href = link.get("href", "")
+                # Expose IDs are hex strings like 6973585d9331de722d41f262
+                id_match = re.search(r"/expose/([a-f0-9]{10,})", href)
+                if not id_match:
+                    continue
+                eid = id_match.group(1)
+                if eid in seen_ids:
+                    continue
+                seen_ids.add(eid)
 
-        # District filter
-        if TARGET_PLZ:
-            before = len(listings)
-            filtered = []
-            for l in listings:
-                loc = l.get("location", "").lower()
-                plz = l.get("district", "")
-                if plz in TARGET_PLZ:
-                    filtered.append(l)
-                elif any(p in loc for p in TARGET_PLZ):
-                    filtered.append(l)
-                elif not plz and not loc:
-                    filtered.append(l)
-            listings = filtered
-            print(f"[immoscout24] District filter: {before} -> {len(listings)}")
+                full_url = href
+                if not full_url.startswith("http"):
+                    full_url = "https://www.immobilienscout24.at" + href
+
+                # Try to extract text content
+                text = link.get_text(strip=True)
+
+                # Try to extract price from text (pattern: "ab X.XXX €" or "X.XXX €")
+                price = ""
+                price_match = re.search(r'(\d[\d.]*)\s*\u20ac(?:/m|$|\s)', text)
+                if price_match:
+                    price = price_match.group(1).replace(".", "")
+
+                # Try to extract size
+                size = ""
+                size_match = re.search(r'(\d[\d,]*)\s*m\u00b2', text)
+                if size_match:
+                    size = size_match.group(1).replace(",", ".")
+
+                # Try to extract rooms
+                rooms = ""
+                rooms_match = re.search(r'(\d+)\s*Zimmer', text)
+                if rooms_match:
+                    rooms = rooms_match.group(1)
+
+                # Try to extract PLZ from text
+                district = ""
+                plz_match = re.search(r'(\d{4})\s*Wien', text)
+                if plz_match:
+                    district = plz_match.group(1)
+
+                listings.append({
+                    "id": f"is_{eid}",
+                    "source": "immoscout24",
+                    "title": text[:150] if text else "N/A",
+                    "price": price,
+                    "size": size,
+                    "rooms": rooms,
+                    "district": district,
+                    "location": "",
+                    "url": full_url,
+                })
+
+            print(f"[immoscout24] HTML links found: {len(listings)}")
+
+        listings = filter_by_district(listings, "immoscout24")
 
     except Exception as e:
         print(f"[immoscout24] ERROR: {e}")
@@ -403,98 +371,62 @@ def scrape_immoscout() -> list[dict]:
     return listings
 
 
-def _parse_immoscout_json(data: dict) -> list[dict]:
+def _parse_immoscout_state(state: dict) -> list[dict]:
+    """Parse the __INITIAL_STATE__ JSON from immoscout24.at"""
     listings = []
 
-    results = []
-    if "props" in data:
-        pp = data["props"].get("pageProps", {})
-        for key in ["results", "searchResult", "resultList", "listings", "items", "data"]:
-            candidate = pp.get(key, None)
-            if isinstance(candidate, list) and len(candidate) > 0:
-                results = candidate
-                print(f"[immoscout24] Found list under pageProps.{key}: {len(results)} items")
-                break
-            elif isinstance(candidate, dict):
-                for subkey in ["results", "items", "listings", "realEstates"]:
-                    sub = candidate.get(subkey, [])
-                    if isinstance(sub, list) and len(sub) > 0:
-                        results = sub
-                        print(f"[immoscout24] Found list under pageProps.{key}.{subkey}: {len(results)} items")
-                        break
-            if results:
-                break
+    # The state structure varies; try common paths
+    # Known: state has "adverts" key with search parameters
 
-    if results and isinstance(results[0], dict):
-        print(f"[immoscout24] First result keys: {list(results[0].keys())[:15]}")
+    # Look for any list of objects that looks like results
+    def find_results(obj, depth=0):
+        if depth > 5:
+            return []
+        results = []
+        if isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, dict) and any(k in item for k in ["id", "realEstateId", "objectId", "title", "headline"]):
+                    results.append(item)
+            if results:
+                return results
+            for item in obj:
+                found = find_results(item, depth + 1)
+                if found:
+                    return found
+        elif isinstance(obj, dict):
+            for key, val in obj.items():
+                found = find_results(val, depth + 1)
+                if found:
+                    return found
+        return results
+
+    results = find_results(state)
+    print(f"[immoscout24] Deep search found {len(results)} candidate items")
 
     for item in results:
-        if not isinstance(item, dict):
-            continue
         item_id = str(item.get("id", item.get("realEstateId", item.get("objectId", ""))))
         if not item_id:
             continue
-
         listings.append({
             "id": f"is_{item_id}",
             "source": "immoscout24",
             "title": item.get("title", item.get("headline", "N/A")),
-            "price": str(item.get("price", item.get("netRent", item.get("totalRent", "")))),
+            "price": str(item.get("price", item.get("totalRent", item.get("netRent", "")))),
             "size": str(item.get("livingSpace", item.get("livingArea", item.get("area", "")))),
             "rooms": str(item.get("numberOfRooms", item.get("rooms", ""))),
-            "district": str(item.get("zipCode", item.get("postcode", item.get("zip", "")))),
-            "location": item.get("address", item.get("location", item.get("district", ""))),
+            "district": str(item.get("zipCode", item.get("postcode", ""))),
+            "location": item.get("address", item.get("location", "")),
             "url": f"https://www.immobilienscout24.at/expose/{item_id}",
         })
 
     return listings
 
 
-def _parse_immoscout_html(soup: BeautifulSoup) -> list[dict]:
-    listings = []
-
-    selectors = [
-        '[data-testid="result-list-item"]',
-        "article.result-item",
-        ".result-list__listing",
-        'a[href*="/expose/"]',
-        'a[href*="/immobilie/"]',
-        'div[class*="result"]',
-    ]
-
-    for sel in selectors:
-        found = soup.select(sel)
-        print(f"[immoscout24] Selector '{sel}': {len(found)} matches")
-        if found:
-            for el in found:
-                link = el.find("a", href=True) if el.name != "a" else el
-                if not link:
-                    continue
-                href = link.get("href", "")
-                if not href.startswith("http"):
-                    href = "https://www.immobilienscout24.at" + href
-
-                id_match = re.search(r"/expose/(\d+)", href) or re.search(r"/(\d{5,})", href)
-                if not id_match:
-                    continue
-                listings.append({
-                    "id": f"is_{id_match.group(1)}",
-                    "source": "immoscout24",
-                    "title": el.get_text(strip=True)[:150],
-                    "price": "",
-                    "size": "",
-                    "rooms": "",
-                    "district": "",
-                    "location": "",
-                    "url": href,
-                })
-            break
-
-    return listings
-
-
 # ============================================================
 # WOHNNET.AT
+# Confirmed: No JSON data, HTML links work.
+# URL format: /immobilien/mietwohnung-{PLZ}-wien-{district}-miete-{rooms}-zimmer-{ID}
+# The numeric ID is at the END of the URL after the last dash.
 # ============================================================
 
 def scrape_wohnnet() -> list[dict]:
@@ -510,113 +442,60 @@ def scrape_wohnnet() -> list[dict]:
         print("[wohnnet] Fetching...")
         resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
         print(f"[wohnnet] Status: {resp.status_code}, Size: {len(resp.text)} chars")
-        print(f"[wohnnet] Final URL: {resp.url}")
         resp.raise_for_status()
-        html = resp.text
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        if len(html) < 1000:
-            print(f"[wohnnet] WARNING: Very short response. Full content:\n{html}")
-        elif "captcha" in html.lower() or "robot" in html.lower():
-            print("[wohnnet] WARNING: Possible captcha/bot detection page")
+        # Find all listing links
+        # Pattern: /immobilien/mietwohnung-1210-wien-floridsdorf-miete-2-zimmer-296937944
+        for link in soup.select('a[href*="/immobilien/mietwohnung"]'):
+            href = link.get("href", "")
 
-        soup = BeautifulSoup(html, "html.parser")
+            # Extract the numeric ID at the END of the URL (after last dash)
+            id_match = re.search(r'-(\d{6,})$', href)
+            if not id_match:
+                continue
 
-        # Strategy 1: __NEXT_DATA__
-        nd_match = re.search(
-            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL
-        )
-        if nd_match:
-            print("[wohnnet] Found __NEXT_DATA__, parsing...")
-            try:
-                data = json.loads(nd_match.group(1))
-                pp = data.get("props", {}).get("pageProps", {})
-                print(f"[wohnnet] pageProps keys: {list(pp.keys())[:15]}")
+            wn_id = id_match.group(1)
+            full_url = href if href.startswith("http") else f"https://www.wohnnet.at{href}"
 
-                results = []
-                for key in ["listings", "results", "items", "data", "ads"]:
-                    candidate = pp.get(key, None)
-                    if isinstance(candidate, list) and len(candidate) > 0:
-                        results = candidate
-                        print(f"[wohnnet] Found list under pageProps.{key}: {len(results)} items")
-                        break
-                    elif isinstance(candidate, dict):
-                        for subkey in ["results", "items", "listings"]:
-                            sub = candidate.get(subkey, [])
-                            if isinstance(sub, list) and len(sub) > 0:
-                                results = sub
-                                print(f"[wohnnet] Found list under pageProps.{key}.{subkey}")
-                                break
-                    if results:
-                        break
+            # Extract PLZ from URL pattern: mietwohnung-{PLZ}-wien
+            plz = ""
+            plz_match = re.search(r'mietwohnung-(\d{4})-wien', href)
+            if plz_match:
+                plz = plz_match.group(1)
 
-                if results and isinstance(results[0], dict):
-                    print(f"[wohnnet] First result keys: {list(results[0].keys())[:15]}")
+            # Extract rooms from URL: miete-{N}-zimmer or miete-{N.N}-zimmer
+            rooms = ""
+            rooms_match = re.search(r'miete-([\d.]+)-zimmer', href)
+            if rooms_match:
+                rooms = rooms_match.group(1)
 
-                for item in results:
-                    if not isinstance(item, dict):
-                        continue
-                    item_id = str(item.get("id", ""))
-                    if not item_id:
-                        continue
-                    item_url = item.get("url", item.get("link", ""))
-                    if item_url and not item_url.startswith("http"):
-                        item_url = "https://www.wohnnet.at" + item_url
-                    elif not item_url:
-                        item_url = f"https://www.wohnnet.at/immobilien/{item_id}"
+            # Extract text content for title and details
+            text = link.get_text(strip=True)
 
-                    listings.append({
-                        "id": f"wn_{item_id}",
-                        "source": "wohnnet",
-                        "title": item.get("title", item.get("name", "N/A")),
-                        "price": str(item.get("price", item.get("rent", ""))),
-                        "size": str(item.get("area", item.get("livingArea", item.get("size", "")))),
-                        "rooms": str(item.get("rooms", "")),
-                        "district": str(item.get("zipCode", item.get("zip", ""))),
-                        "location": item.get("address", item.get("location", "")),
-                        "url": item_url,
-                    })
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"[wohnnet] JSON parse error: {e}")
-        else:
-            print("[wohnnet] No __NEXT_DATA__")
-            scripts = soup.find_all("script", id=True)
-            print(f"[wohnnet] Script tags with id: {[s.get('id') for s in scripts]}")
+            # Try to extract price from text
+            price = ""
+            price_match = re.search(r'([\d.]+)\s*\u20ac', text)
+            if price_match:
+                price = price_match.group(1)
 
-        # Strategy 2: HTML fallback
-        if not listings:
-            print("[wohnnet] Trying HTML fallback...")
-            selectors = [
-                'a[href*="/immobilien/mietwohnung"]',
-                'a[href*="/immobilien/inserat"]',
-                'a[href*="/immobilien/"]',
-                'div[class*="listing"]',
-                'article',
-            ]
-            for sel in selectors:
-                found = soup.select(sel)
-                print(f"[wohnnet] Selector '{sel}': {len(found)} matches")
-                if found and len(found) > 2:
-                    for el in found:
-                        link = el if el.name == "a" else el.find("a", href=True)
-                        if not link or not link.get("href"):
-                            continue
-                        href = link["href"]
-                        if not href.startswith("http"):
-                            href = "https://www.wohnnet.at" + href
-                        id_match = re.search(r"/(\d{5,})", href)
-                        if id_match:
-                            listings.append({
-                                "id": f"wn_{id_match.group(1)}",
-                                "source": "wohnnet",
-                                "title": link.get_text(strip=True)[:150],
-                                "price": "",
-                                "size": "",
-                                "rooms": "",
-                                "district": "",
-                                "location": "",
-                                "url": href,
-                            })
-                    break
+            # Try to extract size from text
+            size = ""
+            size_match = re.search(r'(\d+)\s*m\u00b2', text)
+            if size_match:
+                size = size_match.group(1)
+
+            listings.append({
+                "id": f"wn_{wn_id}",
+                "source": "wohnnet",
+                "title": text[:150] if text else "N/A",
+                "price": price,
+                "size": size,
+                "rooms": rooms,
+                "district": plz,
+                "location": "",
+                "url": full_url,
+            })
 
         # Deduplicate
         seen_ids = set()
@@ -627,7 +506,8 @@ def scrape_wohnnet() -> list[dict]:
                 unique.append(l)
         listings = unique
 
-        print(f"[wohnnet] {len(listings)} listings found")
+        print(f"[wohnnet] Parsed: {len(listings)} listings")
+        listings = filter_by_district(listings, "wohnnet")
 
     except Exception as e:
         print(f"[wohnnet] ERROR: {e}")
@@ -647,7 +527,6 @@ def health_check(results: dict[str, int]):
             health = json.loads(health_file.read_text())
         except json.JSONDecodeError:
             pass
-
     alerts = []
     for source, count in results.items():
         if count == 0:
@@ -657,7 +536,6 @@ def health_check(results: dict[str, int]):
                 alerts.append(source)
         else:
             health[source] = 0
-
     if alerts:
         msg = (
             "\u26a0\ufe0f <b>SCRAPER HEALTH WARNING</b>\n\n"
@@ -666,7 +544,6 @@ def health_check(results: dict[str, int]):
             + "\n\nThe parser may be broken. Check the Action logs."
         )
         send_telegram(msg)
-
     health_file.write_text(json.dumps(health))
 
 
@@ -687,7 +564,6 @@ def main():
     seen = prune_seen(seen)
     new_count = 0
     source_counts = {}
-
     all_listings = []
 
     wh = scrape_willhaben()
