@@ -201,5 +201,19 @@
     "title": "Blueground ID468, Innere Stadt",
     "price": "330",
     "url": "https://www.willhaben.at/iad/object?adId=998894142"
+  },
+  "wh_1708838187": {
+    "first_seen": "2026-03-18T08:30:34.405979+00:00",
+    "source": "willhaben",
+    "title": "Exklusives City-Apartment in Toplage zwischen Rochusmarkt und Donaukanal",
+    "price": "945",
+    "url": "https://www.willhaben.at/iad/object?adId=1708838187"
+  },
+  "is_69ba5b11f32b0b96bd1df965": {
+    "first_seen": "2026-03-18T08:30:35.351498+00:00",
+    "source": "immoscout24",
+    "title": "NeuProvisionsfrei945 €17,02 €/m²Exklusives City-Apartment in Toplage zwischen Ro",
+    "price": "945",
+    "url": "https://www.immobilienscout24.at/expose/69ba5b11f32b0b96bd1df965"
   }
 }
