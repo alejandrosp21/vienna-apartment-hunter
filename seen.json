@@ -264,5 +264,19 @@
     "title": "Kompakte 2-Zimmerwohnung im 3. Stock",
     "price": "690",
     "url": "https://www.willhaben.at/iad/object?adId=868598214"
+  },
+  "wh_1484504427": {
+    "first_seen": "2026-03-18T14:52:34.615952+00:00",
+    "source": "willhaben",
+    "title": "Sanierte 1-Zimmer-Wohnung Nähe U6-Station Dresdnerstrasse",
+    "price": "730",
+    "url": "https://www.willhaben.at/iad/object?adId=1484504427"
+  },
+  "wh_1280654098": {
+    "first_seen": "2026-03-18T14:52:35.482767+00:00",
+    "source": "willhaben",
+    "title": "Blueground ID458, Leopoldstadt",
+    "price": "275",
+    "url": "https://www.willhaben.at/iad/object?adId=1280654098"
   }
 }
