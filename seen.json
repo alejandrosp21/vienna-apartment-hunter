@@ -439,5 +439,26 @@
     "title": "Gemeindewohnung zu vergeben",
     "price": "780",
     "url": "https://www.willhaben.at/iad/object?adId=2007273524"
+  },
+  "wh_648023252": {
+    "first_seen": "2026-03-19T17:36:19.953301+00:00",
+    "source": "willhaben",
+    "title": "AUGARTEN-Nähe, 2,5 Zimmer, 80 m², schöner Altbau",
+    "price": "960",
+    "url": "https://www.willhaben.at/iad/object?adId=648023252"
+  },
+  "wh_1971924824": {
+    "first_seen": "2026-03-19T17:36:20.934006+00:00",
+    "source": "willhaben",
+    "title": "Schöne DG Wohnung für Single oder Pärchen",
+    "price": "980",
+    "url": "https://www.willhaben.at/iad/object?adId=1971924824"
+  },
+  "wh_1483332196": {
+    "first_seen": "2026-03-19T17:36:21.967990+00:00",
+    "source": "willhaben",
+    "title": "Gemütliche 2-Zimmer-Neubauwohnung mit Balkon - zu mieten in 1050 Wien",
+    "price": "966.25",
+    "url": "https://www.willhaben.at/iad/object?adId=1483332196"
   }
 }
