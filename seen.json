@@ -376,5 +376,19 @@
     "title": "Rembrandtstraße: Augarten Nähe - Ruhelage - Geräumige 2 Zimmerwohnung im 3. Stoc",
     "price": "836.66",
     "url": "https://www.willhaben.at/iad/object?adId=806832624"
+  },
+  "wh_1027038735": {
+    "first_seen": "2026-03-19T08:58:44.735539+00:00",
+    "source": "willhaben",
+    "title": "Perfekte Starterwohnung für Studierende - 1 Zimmer mit Terrasse",
+    "price": "849",
+    "url": "https://www.willhaben.at/iad/object?adId=1027038735"
+  },
+  "is_69bbb79e8e6fde553f5d144c": {
+    "first_seen": "2026-03-19T08:58:45.575439+00:00",
+    "source": "immoscout24",
+    "title": "NeuProvisionsfreiTerrasseParkplatz849 €24,32 €/m²Perfekte Starterwohnung für Stu",
+    "price": "849",
+    "url": "https://www.immobilienscout24.at/expose/69bbb79e8e6fde553f5d144c"
   }
 }
