@@ -320,5 +320,40 @@
     "title": "Kompakte 1-Zimmer-Wohnung mit offener Küche Nähe Kettenbrückengasse!",
     "price": "870.24",
     "url": "https://www.willhaben.at/iad/object?adId=1041453595"
+  },
+  "wh_1631375312": {
+    "first_seen": "2026-03-19T04:17:50.785987+00:00",
+    "source": "willhaben",
+    "title": "Wohnpark Markhofgasse Top 7",
+    "price": "709.81",
+    "url": "https://www.willhaben.at/iad/object?adId=1631375312"
+  },
+  "wh_1444807210": {
+    "first_seen": "2026-03-19T04:17:51.675341+00:00",
+    "source": "willhaben",
+    "title": "Wohnen Nähe Naschmarkt - City Apartment mit Charme",
+    "price": "946.22",
+    "url": "https://www.willhaben.at/iad/object?adId=1444807210"
+  },
+  "is_69bb502bf32b0b96bd1f0bdb": {
+    "first_seen": "2026-03-19T04:17:52.533947+00:00",
+    "source": "immoscout24",
+    "title": "NeuProvisionsfreiParkplatzU3Schlachthausgasse709,81 €18,09 €/m²Wohnpark Markhofg",
+    "price": "709.81",
+    "url": "https://www.immobilienscout24.at/expose/69bb502bf32b0b96bd1f0bdb"
+  },
+  "is_69bb2c36f32b0b96bd1ef632": {
+    "first_seen": "2026-03-19T04:17:53.431489+00:00",
+    "source": "immoscout24",
+    "title": "NeuProvisionsfrei690,67 €15,1 €/m²MIT FERNBLICK WOHNEN NÄHE PILGRAMGASSE! Schönb",
+    "price": "690.67",
+    "url": "https://www.immobilienscout24.at/expose/69bb2c36f32b0b96bd1ef632"
+  },
+  "is_6943faa875e50ba3b82c44fc": {
+    "first_seen": "2026-03-19T04:17:54.311552+00:00",
+    "source": "immoscout24",
+    "title": "NeuProvisionsfreiGartenTerrasseTeilmöbliertAltbau890 €23,3 €/m²Miete - Reizvolle",
+    "price": "890",
+    "url": "https://www.immobilienscout24.at/expose/6943faa875e50ba3b82c44fc"
   }
 }
