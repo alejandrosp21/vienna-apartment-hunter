@@ -418,5 +418,12 @@
     "title": "ab 01.05.2026 verfügbar: Smarte 1-Zimmer Wohnung mit großzügiger Terrasse",
     "price": "790",
     "url": "https://www.willhaben.at/iad/object?adId=2091314194"
+  },
+  "wh_1249505445": {
+    "first_seen": "2026-03-19T11:47:48.393595+00:00",
+    "source": "willhaben",
+    "title": "Exklusive 2 Zimmer Wohnung mit Blick auf den Kahlenberg",
+    "price": "897",
+    "url": "https://www.willhaben.at/iad/object?adId=1249505445"
   }
 }
