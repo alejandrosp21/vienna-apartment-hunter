@@ -544,5 +544,12 @@
     "title": "BRIGHT SMALL APARTMENT FOR RENT in a dead end street",
     "price": "550",
     "url": "https://www.willhaben.at/iad/object?adId=2066917328"
+  },
+  "wh_1543183331": {
+    "first_seen": "2026-03-20T12:35:30.123964+00:00",
+    "source": "willhaben",
+    "title": "2-Zimmer Wohnung nahe Augarten in 1020 Wien zu mieten",
+    "price": "947.15",
+    "url": "https://www.willhaben.at/iad/object?adId=1543183331"
   }
 }
