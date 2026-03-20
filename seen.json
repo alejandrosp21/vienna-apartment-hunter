@@ -551,5 +551,19 @@
     "title": "2-Zimmer Wohnung nahe Augarten in 1020 Wien zu mieten",
     "price": "947.15",
     "url": "https://www.willhaben.at/iad/object?adId=1543183331"
+  },
+  "wh_1089129504": {
+    "first_seen": "2026-03-20T13:44:09.357239+00:00",
+    "source": "willhaben",
+    "title": "Helle, gemütliche 2-Zimmer-Neubauwohnung - zu mieten in 1050 Wien",
+    "price": "959.55",
+    "url": "https://www.willhaben.at/iad/object?adId=1089129504"
+  },
+  "wh_836818347": {
+    "first_seen": "2026-03-20T13:44:10.226035+00:00",
+    "source": "willhaben",
+    "title": "Helle 2 Zimmer Dachgeschoß Wohnung in bester Lage - 1050 Wien!",
+    "price": "919.99",
+    "url": "https://www.willhaben.at/iad/object?adId=836818347"
   }
 }
