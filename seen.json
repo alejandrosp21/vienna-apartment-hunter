@@ -474,5 +474,12 @@
     "title": "Top Wohnung am Augarten - Wohlfühlen ohne Provision",
     "price": "740",
     "url": "https://www.willhaben.at/iad/object?adId=853337338"
+  },
+  "wh_1757169427": {
+    "first_seen": "2026-03-20T04:08:48.400000+00:00",
+    "source": "willhaben",
+    "title": "Chice Wohnung mit Balkon - Nähe U-Bahn U4.",
+    "price": "946.01",
+    "url": "https://www.willhaben.at/iad/object?adId=1757169427"
   }
 }
