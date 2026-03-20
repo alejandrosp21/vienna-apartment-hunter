@@ -523,5 +523,26 @@
     "title": "BRIGHT, QUIET, 2 ROOM RENTAL APARTMENT, on the ground floor with terrass for ren",
     "price": "950",
     "url": "https://www.willhaben.at/iad/object?adId=1329377102"
+  },
+  "wh_937404390": {
+    "first_seen": "2026-03-20T11:50:32.450515+00:00",
+    "source": "willhaben",
+    "title": "SOFORTBEZUG - 2er oder 3er WG Studenten! Top Lage Nähe Kardinal Nagel Platz U3",
+    "price": "920",
+    "url": "https://www.willhaben.at/iad/object?adId=937404390"
+  },
+  "wh_1260869978": {
+    "first_seen": "2026-03-20T11:50:33.456312+00:00",
+    "source": "willhaben",
+    "title": "Helle Stadtwohnung nahe Palais Schönburg und Theresianum",
+    "price": "950",
+    "url": "https://www.willhaben.at/iad/object?adId=1260869978"
+  },
+  "wh_2066917328": {
+    "first_seen": "2026-03-20T11:50:34.473032+00:00",
+    "source": "willhaben",
+    "title": "BRIGHT SMALL APARTMENT FOR RENT in a dead end street",
+    "price": "550",
+    "url": "https://www.willhaben.at/iad/object?adId=2066917328"
   }
 }
