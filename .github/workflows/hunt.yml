@@ -4,8 +4,8 @@ on:
   schedule:
     # Every 10 minutes (GitHub may delay cron by a few mins)
     # Adjust to */5 for faster polling (costs more free minutes on private repos)
-        - cron: '*/10 6-21 * * *'
-        - cron: '0 0,2,4 * * *'
+     #   - cron: '*/10 6-21 * * *'
+     #   - cron: '0 0,2,4 * * *'
   workflow_dispatch: # Manual trigger for testing
 
 permissions:
